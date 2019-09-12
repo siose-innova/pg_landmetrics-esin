@@ -1,41 +1,39 @@
 FROM siose-innova/mf2:2014
 
-RUN apk add --no-cache git make build-base
+# Dependencies:
+# 1 install build dependencies from Alpine packages
+# 2 install pg_landmetrics extension from sources
+# 3 install pg_geohash_extra extension from sources
+# 4 remove build dependencies
+WORKDIR /install-ext
+RUN set -ex \
+    && apk add --no-cache --virtual .build-deps \
+        build-base \
+        git \
+        make \
+    && git clone https://github.com/siose-innova/pg_landmetrics.git \
+    && cd pg_landmetrics \
+    && make \
+    && make install \
+    && cd .. \
+    && rm -rf pg_landmetrics \
+    && git clone https://github.com/siose-innova/pg_geohash_extra.git \
+    && cd pg_geohash_extra \
+    && make \
+    && make install \
+    && cd .. \
+    && rm -rf pg_geohash_extra \
+    && apk del .build-deps
 
-###########
-# Add ROI #
-###########
+# Copy region of interest
 WORKDIR /data
-ADD data/spain.* ./
+COPY data/spain.* ./
 
-#######################
-# Install landmetrics #
-#######################
-ENV LM https://github.com/siose-innova/pg_landmetrics.git
+# Set environment variables
+ENV POSTGRES_DB siose2014
+ENV POSTGRES_USER postgres
+ENV POSTGRES_PASSWORD postgres
 
-WORKDIR /install-ext
-RUN git clone $LM
-WORKDIR /install-ext/pg_landmetrics
-RUN make
-RUN make install
-WORKDIR /
-RUN rm -rf /install-ext
-
-###################
-# Install geohash #
-###################
-ENV GEOHASH https://github.com/siose-innova/pg_geohash_extra.git
-
-WORKDIR /install-ext
-RUN git clone $GEOHASH
-WORKDIR /install-ext/pg_geohash_extra
-RUN make
-RUN make install
-WORKDIR /
-RUN rm -rf /install-ext
-
-##############################
-# Init DB and run experiment #
-##############################
-ADD init-db.sh /docker-entrypoint-initdb.d/init-db.sh
-#ADD src/sql/split.sql /docker-entrypoint-initdb.d/split.sql
+# Copy Bash script
+COPY esin.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/esin.sh
